@@ -1,67 +1,82 @@
-from parse_errors import toml_source_map
+try:
+    import tomllib
+except ImportError:
+    import tomli as tomllib  # type: ignore[no-redef]
+
+import pytest
+import msgspec
+
+from parse_errors import ParseContext, ParseError
+
+from ._types import Config, Nested
 
 
-TRICKY = """\
-# comment
-"quoted key" = 42
-dotted.key   = true      # inline comment after value
-
-[server]                 # inline comment on table header
+TOML_SOURCE = """\
 host = "localhost"
-path = "/etc/ssl/key.pem"   # value contains key substring
+port = "not-an-int"
+"""
+
+TOML_NESTED_SOURCE = """\
+[server]
+host = "localhost"
+port = "not-an-int"
 """
 
 
-def test_toml_quoted_key_present():
-    sm = toml_source_map.calculate(TRICKY)
-    assert "/quoted key" in sm, f"missing '/quoted key', got: {sorted(sm)}"
+def test_passthrough_non_jsonspec():
+    with pytest.raises(ValueError, match="^foo$"):
+        with ParseContext("config.toml", data=TOML_SOURCE):
+            raise ValueError("foo")
 
 
-def test_toml_val_end_excludes_comment():
-    sm = toml_source_map.calculate(TRICKY)
-    entry = sm["/dotted/key"]
-    val = TRICKY[entry.value_start.position : entry.value_end.position]
-    assert val == "true", f"got {val!r}"
+def test_toml_raises_parse_error():
+    with pytest.raises(ParseError) as exc_info:
+        with ParseContext("config.toml", data=TOML_SOURCE):
+            data = tomllib.loads(TOML_SOURCE)
+            msgspec.convert(data, Config)
+
+    err = exc_info.value
+    assert err.filename == "config.toml"
+    assert err.line == 2
+    assert str(err) == "config.toml:2:8: Expected `int`, got `str` - at `$.port`"
 
 
-# --- _escape: keys containing / and ~ ---
+def test_toml_bytes_data():
+    with pytest.raises(ParseError) as exc_info:
+        with ParseContext("config.toml", data=TOML_SOURCE.encode()):
+            data = tomllib.loads(TOML_SOURCE)
+            msgspec.convert(data, Config)
 
-ESCAPE_SOURCE = """\
-"path/to/thing" = 1
-"tilde~zero" = 2
+    assert (
+        str(exc_info.value)
+        == "config.toml:2:8: Expected `int`, got `str` - at `$.port`"
+    )
+
+
+def test_toml_nested_raises_parse_error():
+    with pytest.raises(ParseError) as exc_info:
+        with ParseContext("config.toml", data=TOML_NESTED_SOURCE):
+            data = tomllib.loads(TOML_NESTED_SOURCE)
+            msgspec.convert(data, Nested)
+
+    err = exc_info.value
+    assert str(err) == "config.toml:3:8: Expected `int`, got `str` - at `$.server.port`"
+
+
+# --- fallback to nearest parent pointer ---
+
+FALLBACK_SOURCE = """\
+[server]
+port = 8080
 """
 
 
-def test_toml_escape_slash_in_key():
-    sm = toml_source_map.calculate(ESCAPE_SOURCE)
-    assert "/path~1to~1thing" in sm
-
-
-def test_toml_escape_tilde_in_key():
-    sm = toml_source_map.calculate(ESCAPE_SOURCE)
-    assert "/tilde~0zero" in sm
-
-
-# --- non-consecutive array-of-tables with intermediate sub-table ---
-
-AOT_SOURCE = """\
-[[fruits]]
-name = "apple"
-
-[fruits.details]
-color = "red"
-
-[bar]
-
-[[fruits]]
-name = "banana"
-"""
-
-
-def test_toml_nonconsecutive_aot():
-    sm = toml_source_map.calculate(AOT_SOURCE)
-    # [fruits.details] appears after the first [[fruits]], so it belongs to fruits[0]
-    assert "/fruits/0/details" in sm, f"got: {sorted(sm)}"
-    assert "/fruits/0/details/color" in sm
-    # The erroneous flat entry must not exist
-    assert "/fruits/details" not in sm
+def test_toml_fallback_to_parent():
+    # Inject a fake error at a path deeper than the source map tracks.
+    # /server/tls/cert doesn't exist; should fall back to /server (line 1).
+    with pytest.raises(ParseError) as exc_info:
+        with ParseContext("config.toml", data=FALLBACK_SOURCE):
+            raise msgspec.ValidationError(
+                "Expected `str`, got `int` - at `$.server.tls.cert`"
+            )
+    assert exc_info.value.line == 1
