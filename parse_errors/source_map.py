@@ -33,6 +33,7 @@ def detect_format(path: Path) -> str | None:
     """Detect the format of a file based on its extension."""
     suffix = path.suffix.lower()
     return {
+        ".json": "json",
         ".toml": "toml",
         ".yaml": "yaml",
         ".yml": "yaml",
@@ -49,6 +50,12 @@ def build_source_map(source: str | bytes, fmt: str) -> TSourceMap:
         from . import yaml_source_map
 
         return yaml_source_map.calculate(
+            source.decode("utf-8") if isinstance(source, bytes) else source
+        )
+    elif fmt == "json":
+        from . import json_source_map
+
+        return json_source_map.calculate(
             source.decode("utf-8") if isinstance(source, bytes) else source
         )
     else:
