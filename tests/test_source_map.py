@@ -2,6 +2,8 @@ from parse_errors.source_map import build_source_map, Location, Entry, closest_e
 
 
 def test_build_toml():
+    # This isn't an exhaustive test of the toml source mapper, just as something
+    # a minimal example that lets us exercise str/bytes
     sm1 = build_source_map("x=1\nb='foo'\n", fmt="toml")
     assert sm1 == {
         "": Entry(
@@ -22,7 +24,7 @@ def test_build_toml():
         ),
     }
     sm2 = build_source_map(b"x=1\nb='foo'\n", fmt="toml")
-    # Only ascii, so str vs bytes should be the same
+    # Only ASCII, so str vs bytes should be the same
     assert sm1 == sm2
 
 

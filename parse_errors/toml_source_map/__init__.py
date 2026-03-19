@@ -5,6 +5,7 @@ from __future__ import annotations
 import tree_sitter_toml
 import tree_sitter as ts
 from ..source_map import Entry, Location, TSourceMap
+from .._jsonpath import _escape
 
 
 def calculate(source: str | bytes) -> TSourceMap:
@@ -124,6 +125,9 @@ def _pair_key_value(node: ts.Node) -> tuple[ts.Node, ts.Node]:
             key_node = child
         elif child.type not in ("=", "comment"):
             value_node = child
+
+    assert key_node is not None
+    assert value_node is not None
     return key_node, value_node
 
 
@@ -138,8 +142,10 @@ def _table_key(node: ts.Node) -> ts.Node:
 def _key_segments(node: ts.Node) -> list[str]:
     """Extract key path segments from a key node."""
     if node.type == "bare_key":
+        assert node.text is not None
         return [node.text.decode()]
     elif node.type == "quoted_key":
+        assert node.text is not None
         return [_unquote(node.text.decode())]
     elif node.type == "dotted_key":
         return sum((_key_segments(child) for child in node.children), [])
@@ -174,10 +180,6 @@ def _expand_aot_segments(segments: list[str], aot_counts: dict[str, int]) -> lis
 
 def _to_pointer(segments: list[str]) -> str:
     return "/" + "/".join(_escape(s) for s in segments) if segments else ""
-
-
-def _escape(key: str) -> str:
-    return key.replace("~", "~0").replace("/", "~1")
 
 
 def _loc(point: ts.Point, src: bytes) -> Location:
