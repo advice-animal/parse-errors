@@ -34,15 +34,23 @@ def detect_format(path: Path) -> str | None:
     suffix = path.suffix.lower()
     return {
         ".toml": "toml",
+        ".yaml": "yaml",
+        ".yml": "yaml",
     }.get(suffix)
 
 
 def build_source_map(source: str | bytes, fmt: str) -> TSourceMap:
     """Build a source map for the given source in the given format."""
     if fmt == "toml":
-        from .toml_source_map import calculate
+        from . import toml_source_map
 
-        return calculate(source)
+        return toml_source_map.calculate(source)
+    elif fmt in ("yaml", "yml"):
+        from . import yaml_source_map
+
+        return yaml_source_map.calculate(
+            source.decode("utf-8") if isinstance(source, bytes) else source
+        )
     else:
         raise ValueError(f"Unknown format: {fmt!r}")
 
