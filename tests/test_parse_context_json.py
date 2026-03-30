@@ -33,7 +33,7 @@ def test_json_no_error():
 
 
 def test_json_non_jsonpath_exception_passes_through():
-    with pytest.raises(ZeroDivisionError):
+    with pytest.raises(ParseError, match=r"config.json: ZeroDivisionError\('oops'\)"):
         with ParseContext("config.json", data=JSON_SOURCE):
             raise ZeroDivisionError("oops")
 
@@ -77,3 +77,11 @@ def test_json_original_exception_is_cause():
             msgspec.json.decode(JSON_SOURCE.encode(), type=Config)
 
     assert isinstance(exc_info.value.__cause__, msgspec.ValidationError)
+
+
+def test_incomplete_json():
+    with pytest.raises(
+        ParseError, match=r"config.json: DecodeError\('Input data was truncated'\)"
+    ):
+        with ParseContext("config.json", data=JSON_GOOD.decode()[:-2]):
+            msgspec.json.decode(JSON_GOOD[:-2], type=Config)
