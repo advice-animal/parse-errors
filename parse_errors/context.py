@@ -3,12 +3,24 @@
 from __future__ import annotations
 
 import os
+import re
 import contextlib
 from pathlib import Path
 from typing import Iterator
 
-from .source_map import detect_format, build_source_map, closest_entry
+from .source_map import detect_format, build_source_map, closest_entry, Location
 from ._jsonpath import extract_jsonpath, jsonpath_to_pointer
+
+POSITIONAL_RE = re.compile(r"at line (\d+), column (\d+)")
+
+
+def extract_positional_reference(msg: str) -> Location | None:
+    if m := POSITIONAL_RE.search(msg):
+        return Location(
+            line=int(m.group(1)) - 1, column=int(m.group(2)) - 1, position=0
+        )
+    return None
+
 
 __all__ = ["ParseError", "ParseContext"]
 
@@ -50,19 +62,31 @@ def ParseContext(
         yield
     except Exception as exc:
         message = str(exc)
+        path = Path(filename)
+
         # This is focused on msgspec-style exceptions, which use JSONPath for
-        # some reason.  If there are other formats we know can be raised,
-        # adjust this.
+        # some reason.
         jsonpath = extract_jsonpath(message)
         if jsonpath is None:
-            raise
+            # These are raised by toml decoding
+            loc = extract_positional_reference(message)
+            if loc is None:
+                raise ParseError(
+                    f"{filename}: {exc!r}", filename=filename, line=1
+                ) from exc
+
+            raise ParseError(
+                f"{path}:{loc.line + 1}:{loc.column + 1}: {message}",
+                filename=path,
+                line=loc.line + 1,
+                column=loc.column + 1,
+            ) from exc
 
         try:
             pointer = jsonpath_to_pointer(jsonpath)
         except ValueError:  # pragma: no cover
             raise exc
 
-        path = Path(filename)
         fmt = format or detect_format(path)
         assert fmt is not None
 
