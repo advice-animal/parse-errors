@@ -4,7 +4,10 @@ from parse_errors.source_map import build_source_map, Location, Entry, closest_e
 def test_build_toml():
     # This isn't an exhaustive test of the toml source mapper, just as something
     # a minimal example that lets us exercise str/bytes
-    sm1 = build_source_map("x=1\nb='foo'\n", fmt="toml")
+    sm1 = build_source_map("""\
+x=1
+b='foo'
+""", fmt="toml")
     assert sm1 == {
         "": Entry(
             value_start=Location(line=0, column=0, position=0),
@@ -37,7 +40,10 @@ def test_closest_entry():
 
 
 def test_build_toml_table():
-    sm = build_source_map("[section]\nkey = \"val\"\n", fmt="toml")
+    sm = build_source_map("""\
+[section]
+key = "val"
+""", fmt="toml")
     assert sm[""] == Entry(
         value_start=Location(line=0, column=0, position=0),
         value_end=Location(line=2, column=0, position=22),
@@ -55,7 +61,12 @@ def test_build_toml_table():
 
 
 def test_build_toml_aot():
-    sm = build_source_map("[[items]]\nname = \"a\"\n[[items]]\nname = \"b\"\n", fmt="toml")
+    sm = build_source_map("""\
+[[items]]
+name = "a"
+[[items]]
+name = "b"
+""", fmt="toml")
     assert sm["/items"] == Entry(
         value_start=Location(line=0, column=0, position=0),
         value_end=Location(line=0, column=0, position=0),
@@ -109,7 +120,10 @@ def test_build_toml_dotted_key():
 
 
 def test_build_toml_quoted_keys():
-    sm = build_source_map('"foo" = 1\n\'bar\' = 2\n', fmt="toml")
+    sm = build_source_map('''\
+"foo" = 1
+'bar' = 2
+''', fmt="toml")
     assert sm["/foo"] == Entry(
         value_start=Location(line=0, column=8, position=8),
         value_end=Location(line=0, column=9, position=9),

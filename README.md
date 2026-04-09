@@ -32,8 +32,13 @@ with ParseContext(filename, data=raw, format="toml"):
     config = msgspec.convert(data, Config)
 ```
 
-If `msgspec.convert` raises because `port` is a string instead of an integer,
-you get something like:
+`ParseContext` will intercept exceptions. If it can analyze them for precise
+locations, it will raise a `ParseError` exception with the original exception as
+the cause. If it can't find location information, the original exception is
+raised as-is. No exceptions are swallowed.
+
+As a concrete example, if the `msgspec.convert` raises because `port` is a
+string instead of an integer, you get something like:
 
 ```
 parse_errors.ParseError: config.toml:3:8: Expected `int`, got `str` - at `$.port`
