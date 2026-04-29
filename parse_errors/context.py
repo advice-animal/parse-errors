@@ -97,8 +97,10 @@ def ParseContext(
 
         source = data if data is not None else path.read_bytes()
         entry = locate_pointer(source, fmt, pointer)
-        if entry is None:  # pragma: no cover
-            raise exc
+        if entry is None:
+            raise ParseError(
+                f"{filename}: {exc!r}", filename=filename, line=1
+            ) from exc
 
         loc = entry.value_start
         # Lines are 0-based in source maps; convert to 1-based for humans.
