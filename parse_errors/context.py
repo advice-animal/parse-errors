@@ -89,8 +89,8 @@ def ParseContext(
                 f"{filename}: {exc!r}", filename=filename, line=1
             ) from exc
 
-        fmt = format or detect_format(path)
-        if fmt is None:
+        fmt = format.lower() if format else detect_format(path)
+        if fmt not in ("json", "toml", "yaml"):
             raise ParseError(
                 f"{filename}: {exc!r}", filename=filename, line=1
             ) from exc
