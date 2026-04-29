@@ -84,8 +84,10 @@ def ParseContext(
 
         try:
             pointer = jsonpath_to_pointer(jsonpath)
-        except ValueError:  # pragma: no cover
-            raise exc
+        except ValueError:
+            raise ParseError(
+                f"{filename}: {exc!r}", filename=filename, line=1
+            ) from exc
 
         fmt = format or detect_format(path)
         if fmt is None:
