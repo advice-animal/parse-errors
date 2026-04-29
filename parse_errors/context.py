@@ -99,8 +99,10 @@ def ParseContext(
         source_map = build_source_map(source, fmt)
 
         entry = closest_entry(source_map, pointer)
-        if entry is None:  # pragma: no cover
-            raise exc
+        if entry is None:
+            raise ParseError(
+                f"{filename}: {exc!r}", filename=filename, line=1
+            ) from exc
 
         loc = entry.value_start
         # Lines are 0-based in source maps; convert to 1-based for humans.
