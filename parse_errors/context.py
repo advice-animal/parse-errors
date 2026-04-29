@@ -88,7 +88,10 @@ def ParseContext(
             raise exc
 
         fmt = format or detect_format(path)
-        assert fmt is not None
+        if fmt is None:
+            raise ParseError(
+                f"{filename}: {exc!r}", filename=filename, line=1
+            ) from exc
 
         source = data if data is not None else path.read_bytes()
         source_map = build_source_map(source, fmt)
