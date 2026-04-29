@@ -159,13 +159,16 @@ def _header_candidates(
         elif child.type == "table_array_element":
             key_node = _table_key(child)
             raw_segs = _key_segments(key_node)
-            array_pointer = _to_pointer(raw_segs)
+            # Expand parent AoT indices into the prefix, but not the final
+            # segment, which names the AoT being defined.
+            key_segs = _expand_aot_segments(raw_segs[:-1], aot_counts) + raw_segs[-1:]
+            array_pointer = _to_pointer(key_segs)
             occurrence = aot_counts.get(array_pointer, 0)
             if occurrence == 0:
                 loc0 = _loc(child.start_point, src)
-                yield raw_segs, None, Entry(value_start=loc0, value_end=loc0)
+                yield key_segs, None, Entry(value_start=loc0, value_end=loc0)
             aot_counts[array_pointer] = occurrence + 1
-            yield raw_segs + [str(occurrence)], child, _own_entry(child, src)
+            yield key_segs + [str(occurrence)], child, _own_entry(child, src)
 
 
 def _find_in_value(
@@ -248,12 +251,23 @@ def _unquote(s: str) -> str:
 
 
 def _expand_aot_segments(segments: list[str], aot_counts: dict[str, int]) -> list[str]:
-    for i in range(1, len(segments)):
-        prefix_pointer = _to_pointer(segments[:i])
-        if prefix_pointer in aot_counts:
-            idx = aot_counts[prefix_pointer] - 1
-            return segments[:i] + [str(idx)] + segments[i:]
-    return segments
+    """Splice the current AoT index after each segment that is a known AoT key.
+
+    Walks segments left-to-right, building up the pointer incrementally.
+    After appending each segment, if the resulting pointer is a known AoT,
+    the current index (count - 1) is inserted before moving to the next segment.
+    This handles arbitrarily deep nesting.
+
+    e.g. segments=[fruits, details] with aot_counts={/fruits: 1}
+    → [fruits, 0, details]
+    """
+    result: list[str] = []
+    for seg in segments:
+        result.append(seg)
+        candidate = _to_pointer(result)
+        if candidate in aot_counts:
+            result.append(str(aot_counts[candidate] - 1))
+    return result
 
 
 def _to_pointer(segments: list[str]) -> str:
