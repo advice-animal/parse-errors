@@ -84,18 +84,27 @@ def ParseContext(
 
         try:
             pointer = jsonpath_to_pointer(jsonpath)
-        except ValueError:  # pragma: no cover
-            raise exc
+        except ValueError:
+            raise ParseError(
+                f"{filename}: {exc!r}", filename=filename, line=1
+            ) from exc
 
-        fmt = format or detect_format(path)
-        assert fmt is not None
+        fmt = format.lower() if format else detect_format(path)
+        if fmt == "yml":
+            fmt = "yaml"
+        if fmt not in ("json", "toml", "yaml"):
+            raise ParseError(
+                f"{filename}: {exc!r}", filename=filename, line=1
+            ) from exc
 
         source = data if data is not None else path.read_bytes()
         source_map = build_source_map(source, fmt)
 
         entry = closest_entry(source_map, pointer)
-        if entry is None:  # pragma: no cover
-            raise exc
+        if entry is None:
+            raise ParseError(
+                f"{filename}: {exc!r}", filename=filename, line=1
+            ) from exc
 
         loc = entry.value_start
         # Lines are 0-based in source maps; convert to 1-based for humans.
