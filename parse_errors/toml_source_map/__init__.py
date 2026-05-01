@@ -96,7 +96,10 @@ def _process_aot(
     src: bytes,
 ) -> None:
     key_node = _table_key(node)
-    segments = _key_segments(key_node)
+    raw_segments = _key_segments(key_node)
+    # Expand parent AoT indices into the prefix, but not the final segment
+    # (which names the AoT being defined, not a parent of it).
+    segments = _expand_aot_segments(raw_segments[:-1], aot_counts) + raw_segments[-1:]
     array_pointer = _to_pointer(segments)
 
     idx = aot_counts.get(array_pointer, 0)
@@ -165,17 +168,23 @@ def _unquote(s: str) -> str:
 
 
 def _expand_aot_segments(segments: list[str], aot_counts: dict[str, int]) -> list[str]:
-    """If a prefix of segments matches a known AoT, splice in its current index.
+    """Splice the current AoT index after each segment that is a known AoT key.
+
+    Walks segments left-to-right, building up the pointer incrementally.
+    After appending each segment, if the resulting pointer is a known AoT,
+    the current index (count - 1) is inserted before moving to the next segment.
+    This handles arbitrarily deep nesting.
 
     e.g. segments=[fruits, details] with aot_counts={/fruits: 1}
     → [fruits, 0, details]
     """
-    for i in range(1, len(segments)):
-        prefix_pointer = _to_pointer(segments[:i])
-        if prefix_pointer in aot_counts:
-            idx = aot_counts[prefix_pointer] - 1
-            return segments[:i] + [str(idx)] + segments[i:]
-    return segments
+    result: list[str] = []
+    for seg in segments:
+        result.append(seg)
+        candidate = _to_pointer(result)
+        if candidate in aot_counts:
+            result.append(str(aot_counts[candidate] - 1))
+    return result
 
 
 def _to_pointer(segments: list[str]) -> str:
