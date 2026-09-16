@@ -79,6 +79,27 @@ def test_json_original_exception_is_cause():
     assert isinstance(exc_info.value.__cause__, msgspec.ValidationError)
 
 
+def test_jsonpath_error_uses_targeted_location(monkeypatch):
+    from parse_errors import context
+    from parse_errors.source_map import Entry, Location
+
+    calls = []
+
+    def locate_pointer(source, fmt, pointer):
+        calls.append((source, fmt, pointer))
+        loc = Location(line=9, column=4, position=0)
+        return Entry(value_start=loc, value_end=loc)
+
+    monkeypatch.setattr(context, "locate_pointer", locate_pointer)
+
+    with pytest.raises(ParseError) as exc_info:
+        with ParseContext("config.json", data=JSON_SOURCE):
+            msgspec.json.decode(JSON_SOURCE.encode(), type=Config)
+
+    assert calls == [(JSON_SOURCE, "json", "/port")]
+    assert str(exc_info.value).startswith("config.json:10:5:")
+
+
 def test_incomplete_json():
     with pytest.raises(
         ParseError, match=r"config.json: DecodeError\('Input data was truncated'\)"

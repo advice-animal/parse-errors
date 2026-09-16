@@ -1,13 +1,25 @@
-from parse_errors.source_map import build_source_map, Location, Entry, closest_entry
+import pytest
+
+from parse_errors.source_map import (
+    build_source_map,
+    Location,
+    Entry,
+    closest_entry,
+    locate_pointer,
+    SourceMap,
+)
 
 
 def test_build_toml():
     # This isn't an exhaustive test of the toml source mapper, just as something
     # a minimal example that lets us exercise str/bytes
-    sm1 = build_source_map("""\
+    sm1 = build_source_map(
+        """\
 x=1
 b='foo'
-""", fmt="toml")
+""",
+        fmt="toml",
+    )
     assert sm1 == {
         "": Entry(
             value_start=Location(line=0, column=0, position=0),
@@ -40,10 +52,13 @@ def test_closest_entry():
 
 
 def test_build_toml_table():
-    sm = build_source_map("""\
+    sm = build_source_map(
+        """\
 [section]
 key = "val"
-""", fmt="toml")
+""",
+        fmt="toml",
+    )
     assert sm[""] == Entry(
         value_start=Location(line=0, column=0, position=0),
         value_end=Location(line=2, column=0, position=22),
@@ -61,12 +76,15 @@ key = "val"
 
 
 def test_build_toml_aot():
-    sm = build_source_map("""\
+    sm = build_source_map(
+        """\
 [[items]]
 name = "a"
 [[items]]
 name = "b"
-""", fmt="toml")
+""",
+        fmt="toml",
+    )
     assert sm["/items"] == Entry(
         value_start=Location(line=0, column=0, position=0),
         value_end=Location(line=0, column=0, position=0),
@@ -120,10 +138,13 @@ def test_build_toml_dotted_key():
 
 
 def test_build_toml_quoted_keys():
-    sm = build_source_map('''\
+    sm = build_source_map(
+        """\
 "foo" = 1
 'bar' = 2
-''', fmt="toml")
+""",
+        fmt="toml",
+    )
     assert sm["/foo"] == Entry(
         value_start=Location(line=0, column=8, position=8),
         value_end=Location(line=0, column=9, position=9),
@@ -140,7 +161,7 @@ def test_build_toml_quoted_keys():
 
 def test_build_toml_aot_nested_table():
     sm = build_source_map(
-        "[[fruits]]\nname=\"apple\"\n[fruits.details]\ncolor=\"red\"\n", fmt="toml"
+        '[[fruits]]\nname="apple"\n[fruits.details]\ncolor="red"\n', fmt="toml"
     )
     assert "/fruits/0/details" in sm
     assert sm["/fruits/0/details/color"] == Entry(
@@ -154,3 +175,153 @@ def test_build_toml_aot_nested_table():
 def test_closest_entry_fallthrough():
     sm = {}
     assert closest_entry(sm, "/baz") is None
+
+
+_JSON_DOC = '{"a": {"b": [1, 2, {"c": 3}]}, "x": 1}'
+_YAML_DOC = "a:\n  b:\n    - 1\n    - 2\n    - c: 3\nx: 1\n"
+
+_JSON_YAML_POINTERS = [
+    "",
+    "/a",
+    "/a/b",
+    "/a/b/0",
+    "/a/b/2",
+    "/a/b/2/c",
+    "/x",
+    "/nonexistent",
+    "/a/b/99",
+]
+
+# A plain array is a leaf in TOML -- only [[array-of-tables]] elements are
+# individually addressable -- so it needs its own doc/pointer shape rather
+# than sharing the json/yaml ones above.
+_TOML_DOC = (
+    "top = 1\n"
+    '[[items]]\nname = "a"\n'
+    '[[items]]\nname = "b"\n'
+    # A [dotted.table] header right after an array-of-tables element nests
+    # under that most-recently-opened element, even though tree-sitter
+    # parses it as a sibling, not a child, of the [[items]] node.
+    '[items.detail]\ncolor = "red"\n'
+    "nested = { deep = { deeper = 5 } }\n"
+    "[[other.sub]]\nbar = 2\n"
+    "[[other.sub]]\nbar = 3\n"
+)
+
+_TOML_POINTERS = [
+    "",
+    "/top",
+    "/items",
+    "/items/0",
+    "/items/0/name",
+    "/items/1",
+    "/items/1/name",
+    "/items/1/detail",
+    "/items/1/detail/color",
+    "/items/1/detail/nested/deep/deeper",
+    "/items/1/detail/nonexistent",
+    "/items/99",
+    "/other/sub/0/bar",
+    "/other/sub/1/bar",
+    "/other/sub/2/bar",
+    "/nonexistent",
+    "/items/1/name/toofar",  # past a scalar pair value
+    "/items/1/detail/nested/deep/deeper/toofar",  # past a scalar inside an inline_table
+]
+
+# (fmt, doc, its own pointer list) -- the one place each format's example
+# document and matching pointers are paired up, so no test looks either up
+# by fmt at run time.
+_FMT_DOC_POINTERS = [
+    ("json", _JSON_DOC, _JSON_YAML_POINTERS),
+    ("yaml", _YAML_DOC, _JSON_YAML_POINTERS),
+    ("toml", _TOML_DOC, _TOML_POINTERS),
+]
+
+# Flattened to one (fmt, doc, pointer) row per pointer, for tests that check
+# one pointer per case rather than iterating a whole document's list.
+_FMT_DOC_POINTER = [
+    (fmt, doc, pointer)
+    for fmt, doc, pointers in _FMT_DOC_POINTERS
+    for pointer in pointers
+]
+
+# Grows over time: add a document here whenever a bug is found, so the
+# regression is covered by a full-map/locate_pointer comparison over every
+# pointer that document has, not just the specific pointer that was wrong.
+_EXAMPLE_DOCS = [(fmt, doc) for fmt, doc, _ in _FMT_DOC_POINTERS]
+
+
+@pytest.mark.parametrize("fmt,doc", _EXAMPLE_DOCS)
+def test_locate_pointer_matches_every_full_map_entry(fmt, doc):
+    """locate_pointer() must agree with build_source_map() + a direct lookup
+    (not just closest_entry()'s fallback) for every pointer the full map
+    actually has an entry for."""
+    full = build_source_map(doc, fmt=fmt)
+    for pointer, expected in full.items():
+        assert locate_pointer(doc, fmt, pointer) == expected, pointer
+
+
+@pytest.mark.parametrize("fmt,doc,pointer", _FMT_DOC_POINTER)
+def test_locate_pointer_matches_closest_entry(fmt, doc, pointer):
+    full = build_source_map(doc, fmt=fmt)
+    assert locate_pointer(doc, fmt, pointer) == closest_entry(full, pointer)
+
+
+@pytest.mark.parametrize("fmt", ["json", "toml", "yaml"])
+def test_locate_pointer_empty_document(fmt):
+    full = build_source_map("", fmt=fmt)
+    assert locate_pointer("", fmt, "/x") == closest_entry(full, "/x")
+
+
+def test_locate_pointer_unknown_format():
+    with pytest.raises(ValueError, match="Unknown format"):
+        locate_pointer("{}", "ini", "/x")
+
+
+@pytest.mark.parametrize("fmt,doc,pointers", _FMT_DOC_POINTERS)
+def test_source_map_matches_locate_pointer(fmt, doc, pointers):
+    sm = SourceMap(doc, fmt)
+    for pointer in pointers:
+        assert sm.locate(pointer) == locate_pointer(doc, fmt, pointer)
+
+
+def _submodule(fmt):
+    import importlib
+
+    return importlib.import_module(f"parse_errors.{fmt}_source_map")
+
+
+def _count_parse_calls(mod, monkeypatch):
+    real_parse = mod._parse
+    calls = []
+
+    def counting_parse(source):
+        calls.append(source)
+        return real_parse(source)
+
+    monkeypatch.setattr(mod, "_parse", counting_parse)
+    return calls
+
+
+@pytest.mark.parametrize("fmt,doc,pointers", _FMT_DOC_POINTERS)
+def test_source_map_parses_once(fmt, doc, pointers, monkeypatch):
+    calls = _count_parse_calls(_submodule(fmt), monkeypatch)
+
+    sm = SourceMap(doc, fmt)
+    for pointer in pointers:
+        sm.locate(pointer)
+
+    assert len(calls) == 1
+
+
+@pytest.mark.parametrize("fmt", ["json", "toml", "yaml"])
+def test_source_map_empty_document_parses_once(fmt, monkeypatch):
+    calls = _count_parse_calls(_submodule(fmt), monkeypatch)
+
+    full = build_source_map("", fmt=fmt)
+    sm = SourceMap("", fmt)
+    assert sm.locate("/x") == closest_entry(full, "/x")
+    assert sm.locate("/y") == closest_entry(full, "/y")
+
+    assert len(calls) == 1
