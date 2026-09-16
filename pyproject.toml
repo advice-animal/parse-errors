@@ -1,0 +1,105 @@
+[build-system]
+requires = [
+  "setuptools >= 77",
+  "setuptools-scm >= 8",
+]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "parse-errors"
+description = "re-raise parse errors with filename and line number"
+readme = "README.md"
+requires-python = ">=3.10"
+license = "MIT"
+authors = [
+  { name = "Tim Hatch", email = "tim@timhatch.com" },
+]
+classifiers = [
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Programming Language :: Python :: 3.14",
+]
+dynamic = ["version"]
+dependencies = [
+  "pyyaml",
+  "tree-sitter!=0.26.0",
+  "tree-sitter-json",
+  "tree-sitter-toml",
+]
+
+[project.urls]
+Homepage = "https://github.com/advice-animal/parse-errors/"
+
+[project.optional-dependencies]
+dev = [
+  "build >= 1",
+  "checkdeps == 0.9.0",
+  "mypy == 1.19.1",
+  "ruff == 0.15.6",
+  "setuptools >= 65",
+  "ty == 0.0.81",
+  "types-pyyaml",
+]
+test = [
+  "coverage >= 7.14",
+  "msgspec",
+  "pytest >= 8",
+  "tomli",
+]
+
+[project.scripts]
+# foo = "foo:bar"
+
+[tool.setuptools]
+include-package-data = true
+
+[tool.setuptools.packages.find]
+include = ["parse_errors*"]
+
+[tool.setuptools.package-data]
+"parse_errors" = ["py.typed"]
+
+[tool.setuptools_scm]
+version_file = "parse_errors/_version.py"
+
+[tool.coverage.run]
+branch = true
+parallel = true
+source = ["parse_errors", "tests"]
+
+[tool.coverage.report]
+fail_under = 90
+precision = 1
+show_missing = true
+skip_covered = true
+
+[tool.pytest.ini_options]
+addopts = "-ra"
+testpaths = ["tests"]
+
+[tool.mypy]
+ignore_missing_imports = true
+
+[tool.ruff]
+line-length = 88
+target-version = "py310"
+
+[tool.ruff.lint]
+select = [
+  "E4",
+  "E7",
+  "E9",
+  "F",
+  "I", # isort
+]
+
+[tool.ruff.lint.isort]
+order-by-type = false
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = [
+  "PLR2004", # Magic value used instead of constant (only in tests)
+]

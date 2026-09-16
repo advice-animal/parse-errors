@@ -2,10 +2,10 @@ import pytest
 
 from parse_errors.source_map import (
     build_source_map,
-    Location,
-    Entry,
     closest_entry,
+    Entry,
     locate_pointer,
+    Location,
     SourceMap,
 )
 

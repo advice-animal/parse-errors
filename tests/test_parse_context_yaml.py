@@ -1,5 +1,5 @@
-import pytest
 import msgspec
+import pytest
 
 from parse_errors import ParseContext, ParseError
 

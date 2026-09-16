@@ -1,10 +1,9 @@
-import pytest
 import msgspec
+import pytest
 
 from parse_errors import ParseContext, ParseError
 
 from ._types import Config, Nested
-
 
 JSON_GOOD = b'{"host": "localhost", "port": 8080}'
 JSON_BAD = b'{"host": "localhost", "port": "not-an-int"}'

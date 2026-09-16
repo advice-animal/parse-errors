@@ -6,7 +6,6 @@ import dataclasses
 from pathlib import Path
 from typing import Any, Dict, Mapping, Optional, TypeVar
 
-
 # These are identical to the ones in json-source-map, but I feel icky exporting
 # some other project's types because they may change.
 

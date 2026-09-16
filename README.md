@@ -93,7 +93,7 @@ these helpers only to map known error paths back to source locations.
 
 # Version Compat
 
-This library is compatile with Python 3.10+, but should be linted under the
+This library is compatible with Python 3.10+, but should be linted under the
 newest stable version.
 
 # Versioning
