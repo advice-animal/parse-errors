@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Optional
 
 import yaml
+
 from ..source_map import Entry, Location, TSourceMap
 
 # PyYAML's get_single_node() returns a Node tree (Mapping/Sequence/Scalar)

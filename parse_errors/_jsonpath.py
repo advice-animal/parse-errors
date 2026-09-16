@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import re
 
-
 # Matches a single step in a JSONPath: .key or [index] or ['key'] or ["key"]
 _STEP = re.compile(
     r"\.(?P<name>[^.\[]+)"  # .key

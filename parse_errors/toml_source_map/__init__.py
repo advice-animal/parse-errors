@@ -15,10 +15,11 @@ from __future__ import annotations
 
 from typing import Iterator, Optional
 
-import tree_sitter_toml
 import tree_sitter as ts
-from ..source_map import Entry, Location, TSourceMap
+import tree_sitter_toml
+
 from .._jsonpath import _escape
+from ..source_map import Entry, Location, TSourceMap
 
 _LANGUAGE = ts.Language(tree_sitter_toml.language())
 

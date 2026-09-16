@@ -1,16 +1,17 @@
-try:
-    import tomllib
-except ImportError:
-    import tomli as tomllib  # type: ignore[no-redef]
+import sys
 
-import pytest
+if sys.version_info >= (3, 11):
+    import tomllib
+else:
+    import tomli as tomllib
+
 import msgspec
+import pytest
 from msgspec.toml import decode as decode_toml
 
 from parse_errors import ParseContext, ParseError
 
 from ._types import Config, Nested
-
 
 TOML_SOURCE = """\
 host = "localhost"

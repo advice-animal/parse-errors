@@ -2,14 +2,14 @@
 
 from __future__ import annotations
 
+import contextlib
 import os
 import re
-import contextlib
 from pathlib import Path
 from typing import Iterator
 
-from .source_map import Location, detect_format, locate_pointer
 from ._jsonpath import extract_jsonpath, jsonpath_to_pointer
+from .source_map import detect_format, locate_pointer, Location
 
 POSITIONAL_RE = re.compile(r"at line (\d+), column (\d+)")
 

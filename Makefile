@@ -1,37 +1,22 @@
-ifeq ($(OS),Windows_NT)
-    ACTIVATE:=.venv/Scripts/activate
-else
-    ACTIVATE:=.venv/bin/activate
-endif
-
-UV:=$(shell uv --version)
-ifdef UV
-	VENV:=uv venv
-	PIP:=uv pip
-else
-	VENV:=python -m venv
-	PIP:=python -m pip
-endif
-
 .venv:
-	$(VENV) .venv
+	uv sync --extra dev --extra test
 
 .PHONY: setup
-setup: .venv
-	source $(ACTIVATE) && $(PIP) install -Ue .[dev,test]
+setup:
+	uv sync --extra dev --extra test
 
 .PHONY: test
 test:
-	python -m coverage run -m pytest $(TESTOPTS)
-	python -m coverage report
+	uv run coverage run -m pytest $(TESTOPTS)
+	uv run coverage report
 
 .PHONY: format
 format:
-	ruff format
-	ruff check --fix
+	uv run ruff format
+	uv run ruff check --fix
 
 .PHONY: lint
 lint:
-	ruff check
-	python -m checkdeps --allow-names parse_errors parse_errors
-	mypy --strict --install-types --non-interactive parse_errors
+	uv run ruff check
+	uv run python -m checkdeps --allow-names parse_errors parse_errors
+	uv run mypy --strict --install-types --non-interactive parse_errors

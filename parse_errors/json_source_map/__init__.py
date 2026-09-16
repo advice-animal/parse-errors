@@ -13,11 +13,11 @@ from __future__ import annotations
 
 import json
 
-import tree_sitter_json
 import tree_sitter as ts
+import tree_sitter_json
 
-from ..source_map import Entry, Location, TSourceMap
 from .._jsonpath import _escape
+from ..source_map import Entry, Location, TSourceMap
 
 _LANGUAGE = ts.Language(tree_sitter_json.language())
 

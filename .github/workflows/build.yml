@@ -9,9 +9,6 @@ on:
       - v*
   pull_request:
 
-env:
-  UV_SYSTEM_PYTHON: 1
-
 jobs:
   test:
     runs-on: ${{ matrix.os }}
@@ -31,8 +28,7 @@ jobs:
           allow-prereleases: true
       - uses: astral-sh/setup-uv@v3
       - name: Install
-        run: |
-          uv pip install -e .[test,dev]
+        run: uv sync --extra test --extra dev
       - name: Test
         run: |
           git config --global user.name "Unit Test"
@@ -52,9 +48,9 @@ jobs:
           python-version: "3.14"
       - uses: astral-sh/setup-uv@v3
       - name: Install
-        run: uv pip install build
+        run: uv sync --extra test --extra dev
       - name: Build
-        run: python -m build
+        run: uv run python -m build
       - name: Upload
         uses: actions/upload-artifact@v4
         with:
@@ -65,7 +61,9 @@ jobs:
     needs: build
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/v')
+    environment: pypi
     permissions:
+      contents: read
       id-token: write
     steps:
       - uses: actions/download-artifact@v4
