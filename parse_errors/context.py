@@ -8,7 +8,7 @@ import contextlib
 from pathlib import Path
 from typing import Iterator
 
-from .source_map import detect_format, build_source_map, closest_entry, Location
+from .source_map import Location, detect_format, locate_pointer
 from ._jsonpath import extract_jsonpath, jsonpath_to_pointer
 
 POSITIONAL_RE = re.compile(r"at line (\d+), column (\d+)")
@@ -91,9 +91,7 @@ def ParseContext(
         assert fmt is not None
 
         source = data if data is not None else path.read_bytes()
-        source_map = build_source_map(source, fmt)
-
-        entry = closest_entry(source_map, pointer)
+        entry = locate_pointer(source, fmt, pointer)
         if entry is None:  # pragma: no cover
             raise exc
 

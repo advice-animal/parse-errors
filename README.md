@@ -54,6 +54,7 @@ positional information (`at line N, column M`) and re-raises them in the same
 
 ```python
 from parse_errors import ParseContext, ParseError
+from parse_errors.source_map import SourceMap, build_source_map, locate_pointer
 ```
 
 **`ParseContext(filename, *, data=None, format=None)`** — context manager.
@@ -67,6 +68,28 @@ from parse_errors import ParseContext, ParseError
 
 **`ParseError`** — the exception raised inside the context.  Has attributes
 `filename`, `line` (1-based), and `column` (1-based).
+
+**`locate_pointer(source, fmt, pointer)`** — returns the best source-map entry
+for one JSON Pointer without building a full map.  `fmt` is `"json"`,
+`"toml"`, or `"yaml"`; `source` is `str` or UTF-8 `bytes`; `pointer` uses RFC
+6901 escaping.  If the exact pointer is not present, the result matches
+`closest_entry(build_source_map(source, fmt), pointer)`: the nearest enclosing
+value when one exists, otherwise `None`.
+
+**`SourceMap(source, fmt)`** — caches the parsed document for repeated targeted
+lookups.  Use `SourceMap(...).locate(pointer)` when several errors in the same
+document need locations.  It still avoids constructing a full pointer-to-entry
+map.
+
+**`build_source_map(source, fmt)`** — builds the full pointer-to-location map.
+This is useful when callers need many arbitrary entries or need to inspect all
+locations.
+
+**Warning:** source-map helpers locate nodes in a document; they are not
+validating parsers.  JSON and TOML location support uses tree-sitter so it can
+return a location from a syntax tree even when a real decoder would reject the
+source.  Parse or validate the document with your normal parser first, then use
+these helpers only to map known error paths back to source locations.
 
 # Version Compat
 
