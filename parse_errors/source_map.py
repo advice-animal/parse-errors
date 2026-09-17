@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import dataclasses
+import re
 from pathlib import Path
 from typing import Any, Dict, Mapping, Optional, TypeVar
 
@@ -38,6 +39,61 @@ def detect_format(path: Path) -> str | None:
         ".yaml": "yaml",
         ".yml": "yaml",
     }.get(suffix)
+
+
+_POSITIONAL_RE = re.compile(r"at line (\d+), column (\d+)")
+
+
+def locate_decode_error(exc: Exception) -> Location | None:
+    """Best-effort location for a decoder's own syntax-error exception.
+
+    Prefers `.lineno`/`.colno` when the exception sets them: `json.JSONDecodeError`
+    always does; `tomllib.TOMLDecodeError` does from Python 3.14 on, and `tomli`'s
+    backport (used before 3.11) always has. Reading them beats parsing the message,
+    which phrases a failure two different ways depending on where it lands --
+    "at line N, column N" normally, "at end of document" once the parser runs out
+    of input -- and the latter has no digits left to find.
+
+    Falls back to PyYAML's `.problem_mark` (a `Mark` with its own 0-based
+    `.line`/`.column`) when present, then to regexing "at line N, column N" out
+    of `str(exc)` -- stdlib `tomllib` on Python 3.11-3.13 sets neither attribute,
+    so that's the only way to recover a location there for a non-EOF failure.
+
+    Returns ``None`` when nothing above finds one: an EOF failure on those same
+    Python versions, or any exception with no positional information at all
+    (e.g. msgspec's own decoders, which never set `.lineno`/`.colno`).
+    """
+    lineno = getattr(exc, "lineno", None)
+    colno = getattr(exc, "colno", None)
+    if isinstance(lineno, int) and isinstance(colno, int):
+        return Location(line=lineno - 1, column=colno - 1, position=0)
+    mark = getattr(exc, "problem_mark", None)
+    if mark is not None:
+        return Location(line=mark.line, column=mark.column, position=0)
+    if m := _POSITIONAL_RE.search(str(exc)):
+        return Location(
+            line=int(m.group(1)) - 1, column=int(m.group(2)) - 1, position=0
+        )
+    return None
+
+
+def decode_error_message(exc: Exception) -> str:
+    """A one-line message for *exc*, without a source excerpt or caret.
+
+    `.msg` (`json.JSONDecodeError`, and `tomllib.TOMLDecodeError`/`tomli`'s
+    backport when set) and `.problem` (PyYAML) both hold the bare problem
+    description. `str(exc)` is the fallback for anything else, but PyYAML's own
+    `str(exc)` is multi-line -- the problem description plus a quoted source
+    excerpt and a caret under the bad column -- which duplicates a location a
+    caller is about to print itself, so prefer `.problem` over it when present.
+    """
+    msg = getattr(exc, "msg", None)
+    if isinstance(msg, str):
+        return msg
+    problem = getattr(exc, "problem", None)
+    if isinstance(problem, str):
+        return problem
+    return str(exc)
 
 
 def build_source_map(source: str | bytes, fmt: str) -> TSourceMap:

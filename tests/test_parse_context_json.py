@@ -1,3 +1,5 @@
+import json
+
 import msgspec
 import pytest
 
@@ -105,3 +107,22 @@ def test_incomplete_json():
     ):
         with ParseContext("config.json", data=JSON_GOOD.decode()[:-2]):
             msgspec.json.decode(JSON_GOOD[:-2], type=Config)
+
+
+# json.JSONDecodeError phrases its message as "line N column N" -- no "at",
+# no comma -- which the "at line N, column N" regex fallback never matches,
+# so a raw (non-msgspec) json.loads() error always fell back to the generic
+# line=1 case. .lineno/.colno are set regardless of the message's wording.
+# Failing on line 2, not line 1, pins that the reported line is 1-based
+# rather than an unconditional constant.
+
+
+def test_json_raw_decode_error_location():
+    bad = b'{\n  "host": "x"\n  "port": 1\n}\n'
+    with pytest.raises(ParseError) as exc_info:
+        with ParseContext("config.json", data=bad.decode()):
+            json.loads(bad)
+    err = exc_info.value
+    assert err.line == 3
+    assert err.column == 3
+    assert str(err) == "config.json:3:3: Expecting ',' delimiter"
