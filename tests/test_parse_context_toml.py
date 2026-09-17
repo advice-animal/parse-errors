@@ -123,10 +123,16 @@ def test_toml_raw_decode_error_at_end_of_document(monkeypatch):
     # document)" instead of "(at line N, column N)" -- the regex fallback
     # only matches the latter, but .lineno/.colno are set either way on the
     # Python versions/backports that set them at all (locate_decode_error's
-    # own tests cover the ones that don't). Inject a stand-in with those
-    # attributes set so this doesn't depend on which one is running here.
+    # own tests cover the ones that don't). A plain stand-in with those
+    # attributes set is enough -- locate_decode_error()/decode_error_message()
+    # only duck-type the attributes, and this doesn't depend on which
+    # tomllib is running here, or trip its real class's own constructor
+    # (whose deprecated single-string-arg form warns).
+    class FakeTOMLDecodeError(Exception):
+        pass
+
     def fake_loads(s):
-        exc = tomllib.TOMLDecodeError("Invalid value (at end of document)")
+        exc = FakeTOMLDecodeError("Invalid value (at end of document)")
         exc.lineno, exc.colno, exc.msg = 1, 8, "Invalid value"
         raise exc
 
