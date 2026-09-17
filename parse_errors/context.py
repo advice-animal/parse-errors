@@ -4,23 +4,16 @@ from __future__ import annotations
 
 import contextlib
 import os
-import re
 from pathlib import Path
 from typing import Iterator
 
 from ._jsonpath import extract_jsonpath, jsonpath_to_pointer
-from .source_map import detect_format, locate_pointer, Location
-
-POSITIONAL_RE = re.compile(r"at line (\d+), column (\d+)")
-
-
-def extract_positional_reference(msg: str) -> Location | None:
-    if m := POSITIONAL_RE.search(msg):
-        return Location(
-            line=int(m.group(1)) - 1, column=int(m.group(2)) - 1, position=0
-        )
-    return None
-
+from .source_map import (
+    decode_error_message,
+    detect_format,
+    locate_decode_error,
+    locate_pointer,
+)
 
 __all__ = ["ParseError", "ParseContext"]
 
@@ -68,15 +61,16 @@ def ParseContext(
         # some reason.
         jsonpath = extract_jsonpath(message)
         if jsonpath is None:
-            # These are raised by toml decoding
-            loc = extract_positional_reference(message)
+            # These are raised by raw decoding: json.loads(), tomllib.loads(),
+            # yaml.load(), or a msgspec decoder given bad syntax.
+            loc = locate_decode_error(exc)
             if loc is None:
                 raise ParseError(
                     f"{filename}: {exc!r}", filename=filename, line=1
                 ) from exc
 
             raise ParseError(
-                f"{path}:{loc.line + 1}:{loc.column + 1}: {message}",
+                f"{path}:{loc.line + 1}:{loc.column + 1}: {decode_error_message(exc)}",
                 filename=path,
                 line=loc.line + 1,
                 column=loc.column + 1,
@@ -85,24 +79,18 @@ def ParseContext(
         try:
             pointer = jsonpath_to_pointer(jsonpath)
         except ValueError:
-            raise ParseError(
-                f"{filename}: {exc!r}", filename=filename, line=1
-            ) from exc
+            raise ParseError(f"{filename}: {exc!r}", filename=filename, line=1) from exc
 
         fmt = format.lower() if format else detect_format(path)
         if fmt == "yml":
             fmt = "yaml"
         if fmt not in ("json", "toml", "yaml"):
-            raise ParseError(
-                f"{filename}: {exc!r}", filename=filename, line=1
-            ) from exc
+            raise ParseError(f"{filename}: {exc!r}", filename=filename, line=1) from exc
 
         source = data if data is not None else path.read_bytes()
         entry = locate_pointer(source, fmt, pointer)
         if entry is None:
-            raise ParseError(
-                f"{filename}: {exc!r}", filename=filename, line=1
-            ) from exc
+            raise ParseError(f"{filename}: {exc!r}", filename=filename, line=1) from exc
 
         loc = entry.value_start
         # Lines are 0-based in source maps; convert to 1-based for humans.

@@ -3,7 +3,9 @@ import pytest
 from parse_errors.source_map import (
     build_source_map,
     closest_entry,
+    decode_error_message,
     Entry,
+    locate_decode_error,
     locate_pointer,
     Location,
     SourceMap,
@@ -325,3 +327,60 @@ def test_source_map_empty_document_parses_once(fmt, monkeypatch):
     assert sm.locate("/y") == closest_entry(full, "/y")
 
     assert len(calls) == 1
+
+
+# --- locate_decode_error / decode_error_message ---
+#
+# Exercised against synthetic exceptions rather than real json/tomllib/yaml
+# errors, since which attributes a real one carries depends on the
+# interpreter (tomllib.TOMLDecodeError only sets .lineno/.colno from Python
+# 3.14 on) and the installed library version -- these test the four branches
+# directly, independent of either.
+
+
+class _FakeError(Exception):
+    pass
+
+
+def test_locate_decode_error_prefers_lineno_colno():
+    exc = _FakeError("ignored")
+    exc.lineno, exc.colno = 3, 5
+    assert locate_decode_error(exc) == Location(line=2, column=4, position=0)
+
+
+def test_locate_decode_error_uses_problem_mark_without_lineno():
+    class FakeMark:
+        line, column = 2, 6  # already 0-based, like PyYAML's Mark
+
+    exc = _FakeError("mapping values are not allowed here")
+    exc.problem_mark = FakeMark()
+    assert locate_decode_error(exc) == Location(line=2, column=6, position=0)
+
+
+def test_locate_decode_error_falls_back_to_message_regex():
+    exc = _FakeError(
+        "Expected ']' at the end of a table declaration (at line 4, column 9)"
+    )
+    assert locate_decode_error(exc) == Location(line=3, column=8, position=0)
+
+
+def test_locate_decode_error_returns_none_without_any_signal():
+    assert locate_decode_error(ValueError("no position here")) is None
+
+
+def test_decode_error_message_prefers_msg():
+    exc = _FakeError('multi\nline\n"noise"')
+    exc.msg = "Expected value"
+    assert decode_error_message(exc) == "Expected value"
+
+
+def test_decode_error_message_prefers_problem_over_str():
+    exc = _FakeError(
+        'mapping values are not allowed here\n  in "<file>", line 2, column 7:\n      port: 1\n          ^'
+    )
+    exc.problem = "mapping values are not allowed here"
+    assert decode_error_message(exc) == "mapping values are not allowed here"
+
+
+def test_decode_error_message_falls_back_to_str():
+    assert decode_error_message(ValueError("plain message")) == "plain message"
